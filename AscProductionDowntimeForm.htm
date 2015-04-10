@@ -1,0 +1,174 @@
+﻿<!DOCTYPE html>
+<html ng-app="ascProdDowntimeRecordingApp">
+    <head>
+        <title>ASC Production Downtime Recording Form</title>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+
+        <link rel="stylesheet" href="css/bootstrap.min.css" />
+        <link rel="stylesheet" href="css/AscProductionDowntimeRecording.css" />
+        <link rel="stylesheet" href="css/bootstrap-theme.css" />
+
+        <script src="js/jquery-2.1.3.js" type="text/javascript"></script>
+        <script src="js/angular-1.3.14.js"></script>
+        <script src="js/moment-2.7.0.min.js"></script>
+        <script src="js/ui-bootstrap-tpls-0.12.1.js"></script>
+        <script src="js/ascProdDowntimeRecordingApp.js"></script>
+        <script src="js/ascProdDowntimeRecordingFilters.js"></script>
+        <script src="js/ascProdDowntimeRecordingDirectives.js"></script>
+        <style>
+            .nav, .pagination, .carousel, .panel-title a { cursor: pointer; }
+        </style>
+    </head>
+    <body ng-controller="AscProdDowntimeRecordingCtrl">
+        <div class="page-header"><h2>ASC Production Downtime Form</h2></div>
+        <form name="dtForm" novalidate ng-submit="saveRuntime()">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h2 class="panel-title">Runtime Info</h2>
+                    <button type="button" class="btn btn-default" ng-hide="dtForm.$dirty" ng-click="newRuntime()">New Runtime</button>
+                    <button type="submit" class="btn btn-default" ng-show="dtForm.$dirty" ng-disabled="dtForm.$invalid">Save</button>
+                    <button type="button" class="btn btn-default" ng-show="dtForm.$dirty" ng-click="cancelRuntime()">Cancel</button>
+                </div>
+                <div class="panel-body">
+                    <table class="well">
+                        <tr>
+                            <td><label>Work Center</label></td>
+                            <td>
+                                <select class="form-control" ng-model="selectedWorkCenter" ng-options="wc.WorkCenter for wc in workCenters"></select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><label>Shift Start</label></td>
+                            <td>
+                                <select id="ShiftStartDate" ng-show="!dtForm.$dirty" class="form-control" ng-model="selectedShiftStart" ng-options="dt.ShiftStartDate as (dt.ShiftStartDate | date: 'MM/dd/yyyy HH:mm') for dt in productionDowntimes | orderBy: '-ShiftStartDate'"></select>
+
+                                <div ng-show="dtForm.$dirty" class="input-group">
+                                    <span style="vertical-align:middle;">
+                                        <input type="text"
+                                               class="form-control"
+                                               datepicker-popup="MM/dd/yyyy"
+                                               ng-model="selectedDowntime.ShiftStartDate"
+                                               is-open="opened"
+                                               max-date="today"
+                                               datepicker-options="dateOptions"
+                                               show-button-bar="false"
+                                               ng-required="true" />
+                                    </span>
+                                    <span class="input-group-btn">
+                                        <button type="button" class="btn btn-default" ng-click="open($event)"><i class="glyphicon glyphicon-calendar"></i></button>
+                                    </span>
+                                    <timepicker ng-model="selectedDowntime.ShiftStartDate" minute-step="15" readonly-input="true"></timepicker>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><label for="shiftLength">Shift Length (hrs)</label></td>
+                            <td>
+                                <input name="ScheduledShiftLength" id="shiftLength" type="number" min="1" max="24" class="form-control" required ng-model="selectedDowntime.ScheduledShiftLength" ng-disabled="noneSelected()" />
+                                <span ng-show="dtForm.ScheduledShiftLength.$invalid" style="font-color: grey">Must be between 1 and 24</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><label for="machineUpTime">Machine Up Time (mins)</label></td>
+                            <td>
+                                <input name="MachineUpTime" id="machineUpTime" type="number" min="0" max="1440" class="form-control" required ng-model="selectedDowntime.MachineUpTime" ng-disabled="noneSelected()" />
+                                <span ng-show="dtForm.MachineUpTime.$invalid" style="font-color: grey">Must be between 0 and 1440</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><label>Prime Linear Feet</label></td>
+                            <td>
+                                <input name="PrimeLinearFeet" type="number" min="0" max="100000" class="form-control" required ng-model="selectedDowntime.PrimeLinearFeet" ng-disabled="noneSelected()" />
+                                <span ng-show="dtForm.PrimeLinearFeet.$invalid" style="font-color: grey">Must be between 0 and 100,000</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><label>Coil Changes</label></td>
+                            <td>
+                                <input name="CoilChanges" type="number" min="0" max="100" class="form-control" required ng-model="selectedDowntime.CoilChanges" ng-disabled="noneSelected()" />
+                                <span ng-show="dtForm.CoilChanges.$invalid" style="font-color: grey">Must be between 0 and 100</span>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h2 class="panel-title">Profile Changes</h2>
+                    <button type="button" class="btn btn-default" ng-click="addProfileChange()" ng-disabled="noneSelected()">Add</button>
+                </div>
+                <div class="panel-body">
+                    <table class="well">
+                        <thead>
+                            <tr>
+                                <td><label>From</label></td>
+                                <td><label>To</label></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr ng-repeat="profileChange in selectedDowntime.profileChanges | removeDeleted" ng-form="profileChangesForm{{$index}}">
+                                <td><select name="profileFrom{{$index}}" class="form-control" ng-model="profileChange.ProfileFrom" ng-options="pf.Title as pf.Title for pf in profiles" ng-model-options="{ updateOn: 'default change' }"></select></td>
+                                <td><select name="profileTo{{$index}}" class="form-control" ng-model="profileChange.ProfileTo" ng-options="pf.Title as pf.Title for pf in profiles"></select></td>
+                                <td><button type="button" class="btn btn-danger" ng-click="deleteProfileChange(profileChange.ID)"><i class="glyphicon glyphicon-trash"></i></button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h2 class="panel-title">Unscheduled Downtimes</h2>
+                    <button type="button" class="btn btn-default" ng-click="addUnscheduledDowntime()" ng-disabled="noneSelected()">Add</button>
+                </div>
+                <div class="panel-body">
+                    <table class="well">
+                        <thead>
+                            <tr>
+                                <td><label>Profile Running</label></td>
+                                <td><label>Down Time</label></td>
+                                <td colspan="2"><label>Reason</label></td>
+                                <td><label>Details</label></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr ng-repeat="unscheduledDowntime in selectedDowntime.unscheduledDowntime | removeDeleted" ng-form="unscheduledDowntimesForm{{$index}}">
+                                <td><select name="profileRunning{{$index}}" class="form-control" ng-model="unscheduledDowntime.ProfileRunning" ng-options="pf.Title as pf.Title for pf in profiles"></select></td>
+                                <td>
+                                    <input name="downTime{{$index}}" class="form-control" type="number" min="1" max="1440" required ng-model="unscheduledDowntime.DownTime" />
+                                    <span ng-show="dtForm.unscheduledDowntimesForm{{$index}}.downTime{{$index}}.$invalid" style="font-color: grey">Must be between 0 and 100,000</span>
+                                </td>
+                                <td><select name="reasonCode{{$index}}" class="form-control" ng-model="unscheduledDowntime.ReasonCode" ng-options="rc.Title as rc.Title for rc in reasonCodes"></select></td>
+                                <td><span class="form-control">{{ unscheduledDowntime.ReasonCode | reasonDescription: reasonCodes }}</span></td>
+                                <td><input name="details{{$index}}" class="form-control" type="text" ng-model="unscheduledDowntime.Details" /></td>
+                                <td><button type="button" class="btn btn-danger" ng-click="deleteUnscheduledDowntime(unscheduledDowntime.ID)"><i class="glyphicon glyphicon-trash"></i></button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </form>
+        <!--[if lte IE 9]>
+    <script>
+        var html = [];
+        html.push('<div style="width:640px;background:#ffc;margin:10px;padding:10px;border:1px solid #cc8"><span style="color:red;font-weight:bold;font-size:1.2em">Your Internet Explorer must be upgraded to at least version 10 to see this content</span><br>');
+        html.push('You can attempt to <button onclick="upgradeIE()">Upgrade to IE10</button> or <button onclick="contactHelpdesk()">Contact the Helpdesk</button>');
+        html.push('</div>');
+
+        document.body.innerHTML = html.join("<br>");
+
+        function upgradeIE(){
+            alert("Microsoft will suggest IE11, which has not been approved for use.\n\nMake sure you select IE10");
+            window.top.location.href = "http://www.microsoft.com/en-us/download/internet-explorer-10-details.aspx";
+        }
+        function contactHelpdesk(){
+            window.top.location.href = "http://infoscape.steelscape.com/it/WebPartPages/SupportRequestForm.aspx";
+        }
+
+    </script>
+    <![endif]-->
+
+</body>
+</html>
